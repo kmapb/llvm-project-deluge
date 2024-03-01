@@ -1928,6 +1928,7 @@ TypeInfo ASTContext::getTypeInfo(const Type *T) const {
 /// FIXME: Pointers into different addr spaces could have different sizes and
 /// alignment requirements: getPointerInfo should take an AddrSpace, this
 /// should take a QualType, &c.
+
 TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   uint64_t Width = 0;
   uint64_t ConstexprWidth = 0;
@@ -1951,7 +1952,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::FunctionProto:
     // GCC extension: alignof(function) = 32 bits
     Width = 0;
-    ConstexprWidth = 0;
+    ConstexprWidth = 1;
     Align = 32;
     ConstexprAlign = 32;
     break;
@@ -2014,7 +2015,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Align = 16;
     else if (VT->getVectorKind() == VectorType::RVVFixedLengthDataVector)
       // Adjust the alignment for fixed-length RVV vectors.
-      Align = std::min<unsigned>(64, Width);
+    Align = std::min<unsigned>(64, Width);
     ConstexprAlign = std::max<unsigned>(Align, ConstexprAlign);
     break;
   }
@@ -2038,7 +2039,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     case BuiltinType::Void:
       // GCC extension: alignof(void) = 8 bits.
       Width = 0;
-      ConstexprWidth = 0;
+      ConstexprWidth = 1;
       Align = 8;
       ConstexprAlign = 8;
       break;
@@ -2468,8 +2469,14 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     break;
   }
 
-  assert(llvm::isPowerOf2_32(Align) && "Alignment must be power of 2");
-  assert(llvm::isPowerOf2_32(ConstexprAlign) && "Constexpr alignment must be power of 2 (lmao I suck at programming)");
+  auto alignify = [](unsigned& sz) {
+    // Various things seem to treat "0" as a minimal alignment guarantee rather than 1.
+    // (All things are aligned to 1; only bitwise 0 is aligned to 0.)
+    if (sz == 0) { sz = 1; }
+    assert(llvm::isPowerOf2_32(sz) && "it is true, Fil really does suck at programming");
+  };
+  alignify(Align);
+  alignify(ConstexprAlign);
   return TypeInfo(Width, ConstexprWidth, Align, ConstexprAlign, AlignRequirement);
 }
 
